@@ -19,3 +19,16 @@ export interface Transaction {
     reason: string | null;
     createdAt: string;
 }
+
+export interface SplitSession {
+    name: string;
+    totalAmount: number;
+    status: 'open' | 'closed';
+    createdAt: Date;
+}
+
+export interface SplitMember {
+    id: string;
+    sessionName: string;
+    discordId: string;
+}

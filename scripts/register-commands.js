@@ -5,8 +5,8 @@ const commands = [
     options: [
       {
         name: 'user',
-        description: 'The user whose balance you want to modify',
-        type: 6, // USER type
+        description: 'Mention the user whose balance you want to modify (e.g. @Username)',
+        type: 3, // STRING type
         required: true,
       },
       {
@@ -23,8 +23,8 @@ const commands = [
     options: [
       {
         name: 'user',
-        description: 'The user whose balance you want to wipe',
-        type: 6, // USER type
+        description: 'Mention the user whose balance you want to wipe (e.g. @Username)',
+        type: 3, // STRING type
         required: true,
       },
     ],
@@ -39,8 +39,8 @@ const commands = [
     options: [
       {
         name: 'user',
-        description: 'The user whose history you want to see',
-        type: 6, // USER type
+        description: 'Mention the user whose history you want to see (e.g. @Username)',
+        type: 3, // STRING type
         required: false,
       },
     ],
@@ -48,6 +48,89 @@ const commands = [
   {
     name: 'invite',
     description: 'Generates an invite link for the bot with the correct permissions.',
+  },
+  {
+    name: 'split',
+    description: 'Manage active loot split sessions',
+    options: [
+      {
+        name: 'start',
+        description: 'Start a new loot split session',
+        type: 1, // SUB_COMMAND
+        options: [
+          {
+            name: 'name',
+            description: 'A unique name for this split session (e.g. "Ava Roads")',
+            type: 3, // STRING
+            required: true,
+          },
+          {
+            name: 'users',
+            description: 'Mention the users in this split (e.g. @user1 @user2)',
+            type: 3, // STRING
+            required: true,
+          },
+        ]
+      },
+      {
+        name: 'update',
+        description: 'Add or deduct silver from an active split session',
+        type: 1, // SUB_COMMAND
+        options: [
+          {
+            name: 'name',
+            description: 'The name of the active split session',
+            type: 3, // STRING
+            required: true,
+            autocomplete: true,
+          },
+          {
+            name: 'amount',
+            description: 'Amount to add (positive) or deduct (negative)',
+            type: 4, // INTEGER
+            required: true,
+          },
+          {
+            name: 'note',
+            description: 'A note for this update',
+            type: 3, // STRING
+            required: false,
+          },
+        ]
+      },
+      {
+        name: 'close',
+        description: 'Close an active split session and distribute the silver to the users',
+        type: 1, // SUB_COMMAND
+        options: [
+          {
+            name: 'name',
+            description: 'The name of the active split session to close',
+            type: 3, // STRING
+            required: true,
+            autocomplete: true,
+          },
+        ]
+      }
+    ],
+  },
+  {
+    name: 'close',
+    description: 'Pays out mentioned users, zeroing out their owed balances',
+    options: [
+      {
+        name: 'users',
+        description: 'Mention the users who were paid out (e.g. @user1 @user2)',
+        type: 3, // STRING type
+        required: true,
+      },
+      {
+        name: 'note',
+        description: 'Optional note for the payout',
+        type: 3, // STRING type
+        required: false,
+      },
+    ],
   },
 ];
 

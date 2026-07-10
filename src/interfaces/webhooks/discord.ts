@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { verifyKey } from 'discord-interactions';
 import { BalanceService } from '../../application/services/BalanceService';
+import { SessionService } from '../../application/services/SessionService';
 import { handleDiscordInteraction } from '../../infrastructure/discord/commands';
 
-export const discordRouter = new Hono<{ Bindings: { DISCORD_PUBLIC_KEY: string, DISCORD_APPLICATION_ID: string }, Variables: { balanceService: BalanceService } }>();
+export const discordRouter = new Hono<{ Bindings: { DISCORD_PUBLIC_KEY: string, DISCORD_APPLICATION_ID: string }, Variables: { balanceService: BalanceService, sessionService: SessionService } }>();
 
 discordRouter.post('/interaction', async (c) => {
     const signature = c.req.header('x-signature-ed25519');
@@ -27,7 +28,8 @@ discordRouter.post('/interaction', async (c) => {
 
     const interaction = JSON.parse(body);
     const balanceService = c.get('balanceService');
+    const sessionService = c.get('sessionService');
 
-    const response = await handleDiscordInteraction(interaction, balanceService, c.env.DISCORD_APPLICATION_ID);
+    const response = await handleDiscordInteraction(interaction, balanceService, sessionService, c.env.DISCORD_APPLICATION_ID);
     return c.json(response);
 });

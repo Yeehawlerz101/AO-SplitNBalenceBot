@@ -111,4 +111,11 @@ export class BalanceService {
     async getIssuerStats(): Promise<Array<{adminDiscordId: string, totalAmount: number, txCount: number}>> {
         return await this.transactionRepo.getIssuerStats();
     }
+
+    /**
+     * Gets statistics on loot splits.
+     */
+    async getLootSplitStats(): Promise<Array<{note: string, totalAmount: number, splitCount: number, recentDate: string}>> {
+        return await this.transactionRepo.getLootSplitStats();
+    }
 }
