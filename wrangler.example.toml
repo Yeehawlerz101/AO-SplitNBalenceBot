@@ -1,0 +1,17 @@
+name = "ao-splitnbalencebot"
+main = "src/index.ts"
+compatibility_date = "2024-04-05"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+DISCORD_TOKEN="your_discord_bot_token_here"
+DISCORD_PUBLIC_KEY="your_discord_public_key_here"
+DISCORD_APPLICATION_ID="your_discord_application_id_here"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "albion-balances"
+database_id = "your_d1_database_id_here"
+
+[dev]
+port = 8080

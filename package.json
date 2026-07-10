@@ -1,0 +1,41 @@
+{
+  "name": "ao-splitnbalencebot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "invite": "node scripts/generate-invite.js",
+    "register": "node scripts/register-commands.js",
+    "dev": "wrangler dev src/index.ts --local",
+    "deploy": "wrangler deploy index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yeehawlerz101/AO-SplitNBalenceBot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Yeehawlerz101/AO-SplitNBalenceBot/issues"
+  },
+  "homepage": "https://github.com/Yeehawlerz101/AO-SplitNBalenceBot#readme",
+  "dependencies": {
+    "chanfana": "^3.3.0",
+    "chart.js": "^4.5.1",
+    "discord-api-types": "^0.38.49",
+    "discord-interactions": "^4.4.0",
+    "halfmoon": "^2.0.2",
+    "hono": "^4.12.29",
+    "nanoid": "^5.1.16",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260710.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.110.0"
+  }
+}
