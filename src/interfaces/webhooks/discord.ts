@@ -15,16 +15,16 @@ discordRouter.post('/interaction', async (c) => {
         return c.text('Bad request signature', 401);
     }
 
-    // const isValidRequest = await verifyKey(
-    //     body,
-    //     signature,
-    //     timestamp,
-    //     c.env.DISCORD_PUBLIC_KEY
-    // );
+    const isValidRequest = await verifyKey(
+        body,
+        signature,
+        timestamp,
+        c.env.DISCORD_PUBLIC_KEY
+    );
 
-    // if (!isValidRequest) {
-    //     return c.text('Bad request signature', 401);
-    // }
+    if (!isValidRequest) {
+        return c.text('Bad request signature', 401);
+    }
 
     const interaction = JSON.parse(body);
     const balanceService = c.get('balanceService');
