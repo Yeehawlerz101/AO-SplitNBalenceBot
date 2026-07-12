@@ -52,27 +52,40 @@ export class SessionService {
         return (await this.sessionRepo.getSession(name))!;
     }
 
-    async closeSession(name: string, adminDiscordId: string): Promise<{session: SplitSession, splitAmount: number, members: string[]}> {
+    async getMembers(name: string): Promise<string[]> {
+        const members = await this.sessionRepo.getMembers(name);
+        return members.map(m => m.discordId);
+    }
+
+    async closeSession(name: string, adminDiscordId: string, bannedUserIds: string[] = []): Promise<{session: SplitSession, splitAmount: number, members: string[], skipped: string[]}> {
         const session = await this.sessionRepo.getSession(name);
         if (!session) throw new Error(`Session "${name}" not found.`);
         if (session.status === 'closed') throw new Error(`Session "${name}" is already closed.`);
 
-        const members = await this.sessionRepo.getMembers(name);
-        if (members.length === 0) {
+        const allMembers = await this.sessionRepo.getMembers(name);
+        const validMembers = allMembers.filter(m => !bannedUserIds.includes(m.discordId));
+        const skippedMembers = allMembers.filter(m => bannedUserIds.includes(m.discordId));
+        
+        if (validMembers.length === 0) {
             await this.sessionRepo.closeSession(name);
-            return { session, splitAmount: 0, members: [] };
+            return { session, splitAmount: 0, members: [], skipped: skippedMembers.map(m => m.discordId) };
         }
 
-        const splitAmount = Math.floor(session.totalAmount / members.length);
+        const splitAmount = Math.floor(session.totalAmount / validMembers.length);
 
-        // Distribute funds
-        await Promise.all(members.map(m => 
+        // Distribute funds only to valid members
+        await Promise.all(validMembers.map(m => 
             this.balanceService.modifyBalance(m.discordId, splitAmount, adminDiscordId, `Split: ${name}`)
         ));
 
         await this.sessionRepo.closeSession(name);
         const closedSession = (await this.sessionRepo.getSession(name))!;
 
-        return { session: closedSession, splitAmount, members: members.map(m => m.discordId) };
+        return { 
+            session: closedSession, 
+            splitAmount, 
+            members: validMembers.map(m => m.discordId),
+            skipped: skippedMembers.map(m => m.discordId)
+        };
     }
 }

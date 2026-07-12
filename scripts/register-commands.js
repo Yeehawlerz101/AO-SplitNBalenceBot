@@ -132,6 +132,56 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'perms',
+    description: 'Manage role permissions for the bot',
+    options: [
+      {
+        name: 'action',
+        description: 'Allow or Disallow a permission',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: 'Allow', value: 'allow' },
+          { name: 'Disallow', value: 'disallow' }
+        ]
+      },
+      {
+        name: 'permission',
+        description: 'The permission level to assign',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: 'Admin', value: 'ADMIN' },
+          { name: 'Split Manager', value: 'SPLIT_MANAGER' },
+          { name: 'Banned', value: 'BANNED' }
+        ]
+      },
+      {
+        name: 'role',
+        description: 'The Discord role to apply this to',
+        type: 8, // ROLE
+        required: true,
+      }
+    ]
+  },
+  {
+    name: 'setlog',
+    description: 'Set a channel for bot audit logs',
+    options: [
+      {
+        name: 'channel',
+        description: 'The channel to send plain-text logs to',
+        type: 7, // CHANNEL
+        required: true,
+      }
+    ]
+  },
+  {
+    name: 'help',
+    description: 'Display all commands and bot features',
+    options: []
+  }
 ];
 
 import fs from 'fs';

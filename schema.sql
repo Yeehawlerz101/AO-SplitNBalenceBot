@@ -39,3 +39,15 @@ CREATE TABLE split_members (
     discord_id TEXT NOT NULL,
     FOREIGN KEY (session_name) REFERENCES split_sessions(name) ON DELETE CASCADE
 );
+
+CREATE TABLE role_permissions (
+    role_id TEXT PRIMARY KEY,
+    permission TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE guild_settings (
+    guild_id TEXT PRIMARY KEY,
+    log_channel_id TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

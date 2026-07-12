@@ -8,25 +8,30 @@ import { D1TransactionRepository } from './infrastructure/database/d1/D1Transact
 import { D1SessionRepository } from './infrastructure/database/d1/D1SessionRepository';
 import { BalanceService } from './application/services/BalanceService';
 import { SessionService } from './application/services/SessionService';
+import { SettingsService } from './application/services/SettingsService';
 
 export interface Env {
     DB: D1Database;
     DISCORD_PUBLIC_KEY: string;
     DISCORD_APPLICATION_ID: string;
+    DISCORD_TOKEN: string;
 }
 
-const app = new Hono<{ Bindings: Env; Variables: { balanceService: BalanceService; sessionService: SessionService } }>();
+const app = new Hono<{ Bindings: Env; Variables: { balanceService: BalanceService; sessionService: SessionService; settingsService: SettingsService } }>();
 
 app.use('*', async (c, next) => {
     const userRepo = new D1UserRepository(c.env.DB);
     const walletRepo = new D1WalletRepository(c.env.DB);
     const txRepo = new D1TransactionRepository(c.env.DB);
     const sessionRepo = new D1SessionRepository(c.env.DB);
+    
     const balanceService = new BalanceService(userRepo, walletRepo, txRepo);
     const sessionService = new SessionService(sessionRepo, balanceService);
+    const settingsService = new SettingsService(c.env.DB);
 
     c.set('balanceService', balanceService);
     c.set('sessionService', sessionService);
+    c.set('settingsService', settingsService);
     await next();
 });
 
