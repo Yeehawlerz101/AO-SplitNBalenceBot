@@ -49,5 +49,7 @@ CREATE TABLE role_permissions (
 CREATE TABLE guild_settings (
     guild_id TEXT PRIMARY KEY,
     log_channel_id TEXT,
+    bind_channel_id TEXT,
+    split_tax REAL DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

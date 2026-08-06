@@ -35,6 +35,26 @@ export class SettingsService {
         return result?.log_channel_id || null;
     }
 
+    async getGuildSettings(guildId: string): Promise<{ log_channel_id: string | null, bind_channel_id: string | null, split_tax: number } | null> {
+        const result = await this.db.prepare(
+            "SELECT log_channel_id, bind_channel_id, split_tax FROM guild_settings WHERE guild_id = ?"
+        ).bind(guildId).first<{log_channel_id: string | null, bind_channel_id: string | null, split_tax: number}>();
+        
+        return result || null;
+    }
+
+    async setBindChannel(guildId: string, channelId: string): Promise<void> {
+        await this.db.prepare(
+            "INSERT INTO guild_settings (guild_id, bind_channel_id) VALUES (?, ?) ON CONFLICT(guild_id) DO UPDATE SET bind_channel_id = excluded.bind_channel_id"
+        ).bind(guildId, channelId).run();
+    }
+
+    async setSplitTax(guildId: string, taxPercentage: number): Promise<void> {
+        await this.db.prepare(
+            "INSERT INTO guild_settings (guild_id, split_tax) VALUES (?, ?) ON CONFLICT(guild_id) DO UPDATE SET split_tax = excluded.split_tax"
+        ).bind(guildId, taxPercentage).run();
+    }
+
     async hasPermission(userRoleIds: string[], requiredPermissions: string[]): Promise<boolean> {
         if (!userRoleIds || userRoleIds.length === 0) return false;
 

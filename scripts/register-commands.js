@@ -181,6 +181,46 @@ const commands = [
     name: 'help',
     description: 'Display all commands and bot features',
     options: []
+  },
+  {
+    name: 'config',
+    description: 'Configure bot settings',
+    options: [
+      {
+        name: 'setting',
+        description: 'The setting to configure',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: 'bind-channel', value: 'bind-channel' },
+          { name: 'split-tax', value: 'split-tax' }
+        ]
+      },
+      {
+        name: 'value',
+        description: 'The value for the setting (Channel mention or number)',
+        type: 3, // STRING
+        required: true
+      }
+    ]
+  },
+  {
+    name: 'activity',
+    description: 'Track who has been in splits between two dates',
+    options: [
+      {
+        name: 'start-date',
+        description: 'Start date (Format: YYYY-MM-DD)',
+        type: 3, // STRING
+        required: true
+      },
+      {
+        name: 'end-date',
+        description: 'End date (Format: YYYY-MM-DD)',
+        type: 3, // STRING
+        required: true
+      }
+    ]
   }
 ];
 

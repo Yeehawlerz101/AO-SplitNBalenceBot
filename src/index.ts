@@ -9,6 +9,7 @@ import { D1SessionRepository } from './infrastructure/database/d1/D1SessionRepos
 import { BalanceService } from './application/services/BalanceService';
 import { SessionService } from './application/services/SessionService';
 import { SettingsService } from './application/services/SettingsService';
+import { ActivityService } from './application/services/ActivityService';
 
 export interface Env {
     DB: D1Database;
@@ -17,7 +18,7 @@ export interface Env {
     DISCORD_TOKEN: string;
 }
 
-const app = new Hono<{ Bindings: Env; Variables: { balanceService: BalanceService; sessionService: SessionService; settingsService: SettingsService } }>();
+const app = new Hono<{ Bindings: Env; Variables: { balanceService: BalanceService; sessionService: SessionService; settingsService: SettingsService; activityService: ActivityService } }>();
 
 app.use('*', async (c, next) => {
     const userRepo = new D1UserRepository(c.env.DB);
@@ -28,10 +29,12 @@ app.use('*', async (c, next) => {
     const balanceService = new BalanceService(userRepo, walletRepo, txRepo);
     const sessionService = new SessionService(sessionRepo, balanceService);
     const settingsService = new SettingsService(c.env.DB);
+    const activityService = new ActivityService(c.env.DB);
 
     c.set('balanceService', balanceService);
     c.set('sessionService', sessionService);
     c.set('settingsService', settingsService);
+    c.set('activityService', activityService);
     await next();
 });
 

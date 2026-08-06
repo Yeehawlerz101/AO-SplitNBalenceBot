@@ -2,6 +2,7 @@ import { InteractionResponseType, InteractionType } from 'discord-interactions';
 import { BalanceService } from '../../../application/services/BalanceService';
 import { SessionService } from '../../../application/services/SessionService';
 import { SettingsService } from '../../../application/services/SettingsService';
+import { ActivityService } from '../../../application/services/ActivityService';
 import { DiscordLogService } from '../../../application/services/DiscordLogService';
 
 export async function handleDiscordInteraction(
@@ -9,6 +10,7 @@ export async function handleDiscordInteraction(
     balanceService: BalanceService, 
     sessionService: SessionService,
     settingsService: SettingsService,
+    activityService: ActivityService,
     discordLogService: DiscordLogService,
     applicationId: string
 ) {
@@ -49,21 +51,25 @@ export async function handleDiscordInteraction(
         const member = interaction.member;
         const adminId = member?.user?.id || interaction.user?.id;
 
+        const guildSettings = await settingsService.getGuildSettings(guildId);
+        
         // PERMISSION MIDDLEWARE
+        let isAdmin = false;
         if (member) {
             const isOwner = member.user?.id === interaction.guild?.owner_id;
             const hasAdminPerm = (BigInt(member.permissions || '0') & BigInt(8)) === BigInt(8);
             
-            let allowed = isOwner || hasAdminPerm;
+            isAdmin = isOwner || hasAdminPerm;
+            let allowed = isAdmin;
             
             if (!allowed) {
                 // Determine required perms based on command
                 let reqPerms: string[] = [];
-                if (['bal', 'wipe', 'perms', 'setlog', 'invite'].includes(name)) reqPerms = ['ADMIN'];
+                if (['bal', 'wipe', 'perms', 'setlog', 'invite', 'config'].includes(name)) reqPerms = ['ADMIN'];
                 if (name === 'split' || name === 'close') reqPerms = ['ADMIN', 'SPLIT_MANAGER'];
 
                 // Commands that everyone can run
-                if (['wallet', 'history', 'help'].includes(name)) reqPerms = [];
+                if (['wallet', 'history', 'help', 'activity'].includes(name)) reqPerms = [];
 
                 if (reqPerms.length > 0) {
                     allowed = await settingsService.hasPermission(member.roles || [], reqPerms);
@@ -77,6 +83,15 @@ export async function handleDiscordInteraction(
             
             if (!allowed) {
                 return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: '❌ You do not have permission to run this command, or you are banned from using the bot.', flags: 64 } };
+            }
+
+            // Channel Binding Middleware for Split Managers
+            if (name === 'split' || name === 'close') {
+                if (guildSettings?.bind_channel_id && interaction.channel_id !== guildSettings.bind_channel_id) {
+                    if (!isAdmin) {
+                        return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `❌ You can't use this command here unless you are an admin. Please use <#${guildSettings.bind_channel_id}>`, flags: 64 } };
+                    }
+                }
             }
         }
 
@@ -105,8 +120,11 @@ export async function handleDiscordInteraction(
                 const userStr = options?.find((o: any) => o.name === 'user')?.value || '';
                 const amount = options?.find((o: any) => o.name === 'amount')?.value;
 
-                const match = /<@!?(\d+)>/.exec(userStr);
-                const targetUserId = match ? match[1] : null;
+                let targetUserId = null;
+                if (userStr) {
+                    const match = /<@!?(\d+)>/.exec(userStr);
+                    targetUserId = match ? match[1] : userStr;
+                }
 
                 if (!targetUserId || amount === undefined) {
                     return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please mention a valid user (e.g. @Username) and provide an amount.' } };
@@ -132,7 +150,7 @@ export async function handleDiscordInteraction(
                 const userStr = options?.find((o: any) => o.name === 'user')?.value || '';
 
                 const match = /<@!?(\d+)>/.exec(userStr);
-                const targetUserId = match ? match[1] : null;
+                const targetUserId = match ? match[1] : (userStr || null);
 
                 if (!targetUserId) {
                     return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please mention a valid user (e.g. @Username).' } };
@@ -175,6 +193,8 @@ export async function handleDiscordInteraction(
                     const match = /<@!?(\d+)>/.exec(userStr);
                     if (match) {
                         targetUserId = match[1];
+                    } else if (typeof userStr === 'string' && /^\d+$/.test(userStr)) {
+                        targetUserId = userStr;
                     } else {
                         return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please mention a valid user (e.g. @Username).' } };
                     }
@@ -323,15 +343,19 @@ export async function handleDiscordInteraction(
                             }
                         }
 
-                        const { session, splitAmount, members, skipped } = await sessionService.closeSession(sessionName, adminId, bannedUserIds);
+                        const { session, splitAmount, members, skipped, taxAmount } = await sessionService.closeSession(sessionName, adminId, bannedUserIds, guildSettings?.split_tax || 0);
                         
-                        let description = `**Session:** ${sessionName}\n**Final Pool:** ${session.totalAmount.toLocaleString()}\n\n**Split Amount:** +${splitAmount.toLocaleString()} per user\n\n**Recipients:**\n${members.map(id => `<@${id}>`).join(', ') || 'None'}`;
+                        let description = `**Session:** ${sessionName}\n**Final Pool:** ${session.totalAmount.toLocaleString()}`;
+                        if (taxAmount > 0) {
+                            description += `\n**Split Tax Paid to Guild (${guildSettings?.split_tax}%):** ${taxAmount.toLocaleString()}`;
+                        }
+                        description += `\n\n**Split Amount:** +${splitAmount.toLocaleString()} per user\n\n**Recipients:**\n${members.map(id => `<@${id}>`).join(', ') || 'None'}`;
 
                         if (skipped.length > 0) {
                             description += `\n\n**Skipped (Banned):**\n${skipped.map(id => `<@${id}>`).join(', ')}`;
                         }
 
-                        await discordLogService.sendLog(guildId, `🔒 <@${adminId}> closed session \`${sessionName}\`. Split **${session.totalAmount.toLocaleString()}** silver across ${members.length} members (+${splitAmount.toLocaleString()} each).${skipped.length > 0 ? ` Skipped ${skipped.length} banned users.` : ''}`);
+                        await discordLogService.sendLog(guildId, `🔒 <@${adminId}> closed session \`${sessionName}\`. Split **${session.totalAmount.toLocaleString()}** silver across ${members.length} members (+${splitAmount.toLocaleString()} each).${taxAmount > 0 ? ` Tax paid: ${taxAmount.toLocaleString()}.` : ''}${skipped.length > 0 ? ` Skipped ${skipped.length} banned users.` : ''}`);
 
                         return {
                             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -422,6 +446,67 @@ export async function handleDiscordInteraction(
                             title: '💰 Payout Complete',
                             description: description,
                             color: 0x2ecc71
+                        }]
+                    }
+                };
+            }
+            case 'config': {
+                const setting = options?.find((o: any) => o.name === 'setting')?.value;
+                const value = options?.find((o: any) => o.name === 'value')?.value;
+
+                if (setting === 'bind-channel') {
+                    const match = /<#(\d+)>/.exec(value);
+                    const channelId = match ? match[1] : value;
+                    if (!/^\d+$/.test(channelId)) {
+                        return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please mention a valid channel (e.g. <#channel-id>).' } };
+                    }
+                    await settingsService.setBindChannel(guildId, channelId);
+                    return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `Successfully bound split commands to <#${channelId}>.` } };
+                } else if (setting === 'split-tax') {
+                    const taxNum = parseFloat(value);
+                    if (isNaN(taxNum) || taxNum < 0 || taxNum > 100) {
+                        return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please provide a valid tax percentage between 0 and 100.' } };
+                    }
+                    await settingsService.setSplitTax(guildId, taxNum);
+                    return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `Successfully set split tax to **${taxNum}%**.` } };
+                }
+                return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Unknown configuration setting.' } };
+            }
+            case 'activity': {
+                const startDate = options?.find((o: any) => o.name === 'start-date')?.value;
+                const endDate = options?.find((o: any) => o.name === 'end-date')?.value;
+
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+                    return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please provide dates in the format YYYY-MM-DD.' } };
+                }
+
+                const leaderboard = await activityService.getActivityLeaderboard(startDate, endDate);
+                
+                if (leaderboard.length === 0) {
+                    return {
+                        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                        data: {
+                            embeds: [{
+                                title: `📊 Activity Tracker`,
+                                description: `No splits recorded between **${startDate}** and **${endDate}**.`,
+                                color: 0x3498db
+                            }]
+                        }
+                    };
+                }
+
+                const leaderboardStr = leaderboard.map((l, index) => {
+                    return `**${index + 1}.** <@${l.discordId}> - ${l.splitsAttended} splits`;
+                }).join('\n');
+
+                return {
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: {
+                        embeds: [{
+                            title: `📊 Activity Tracker (${startDate} to ${endDate})`,
+                            description: leaderboardStr,
+                            color: 0x3498db
                         }]
                     }
                 };

@@ -57,7 +57,7 @@ export class SessionService {
         return members.map(m => m.discordId);
     }
 
-    async closeSession(name: string, adminDiscordId: string, bannedUserIds: string[] = []): Promise<{session: SplitSession, splitAmount: number, members: string[], skipped: string[]}> {
+    async closeSession(name: string, adminDiscordId: string, bannedUserIds: string[] = [], splitTax: number = 0): Promise<{session: SplitSession, splitAmount: number, members: string[], skipped: string[], taxAmount: number}> {
         const session = await this.sessionRepo.getSession(name);
         if (!session) throw new Error(`Session "${name}" not found.`);
         if (session.status === 'closed') throw new Error(`Session "${name}" is already closed.`);
@@ -68,10 +68,12 @@ export class SessionService {
         
         if (validMembers.length === 0) {
             await this.sessionRepo.closeSession(name);
-            return { session, splitAmount: 0, members: [], skipped: skippedMembers.map(m => m.discordId) };
+            return { session, splitAmount: 0, members: [], skipped: skippedMembers.map(m => m.discordId), taxAmount: 0 };
         }
 
-        const splitAmount = Math.floor(session.totalAmount / validMembers.length);
+        const taxAmount = splitTax > 0 ? Math.floor(session.totalAmount * (splitTax / 100)) : 0;
+        const poolAfterTax = session.totalAmount - taxAmount;
+        const splitAmount = Math.floor(poolAfterTax / validMembers.length);
 
         // Distribute funds only to valid members
         await Promise.all(validMembers.map(m => 
@@ -85,7 +87,8 @@ export class SessionService {
             session: closedSession, 
             splitAmount, 
             members: validMembers.map(m => m.discordId),
-            skipped: skippedMembers.map(m => m.discordId)
+            skipped: skippedMembers.map(m => m.discordId),
+            taxAmount
         };
     }
 }
