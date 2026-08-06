@@ -3,10 +3,14 @@ import { D1Database } from '@cloudflare/workers-types';
 export class ActivityService {
     constructor(private db: D1Database) {}
 
-    async getActivityLeaderboard(startDate: string, endDate: string): Promise<{ discordId: string, splitsAttended: number }[]> {
+    async getActivityLeaderboard(startDate: string, endDate: string): Promise<{ discordId: string, splitsAttended: number, percentage: number }[]> {
         // endDate is expected to be 'YYYY-MM-DD', to make it inclusive we can append ' 23:59:59'
         const endDateTime = `${endDate} 23:59:59`;
         
+        const totalQuery = `SELECT COUNT(*) as total FROM split_sessions WHERE created_at >= ? AND created_at <= ?`;
+        const totalResult = await this.db.prepare(totalQuery).bind(startDate, endDateTime).first<{total: number}>();
+        const totalSplits = totalResult?.total || 0;
+
         const query = `
             SELECT sm.discord_id as discordId, COUNT(sm.id) as splitsAttended
             FROM split_members sm
@@ -17,6 +21,10 @@ export class ActivityService {
         `;
 
         const { results } = await this.db.prepare(query).bind(startDate, endDateTime).all<{discordId: string, splitsAttended: number}>();
-        return results;
+        
+        return results.map(r => ({
+            ...r,
+            percentage: totalSplits > 0 ? (r.splitsAttended / totalSplits) * 100 : 0
+        }));
     }
 }

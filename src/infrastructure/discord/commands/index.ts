@@ -5,6 +5,17 @@ import { SettingsService } from '../../../application/services/SettingsService';
 import { ActivityService } from '../../../application/services/ActivityService';
 import { DiscordLogService } from '../../../application/services/DiscordLogService';
 
+
+function formatSilver(num: number): string {
+    if (Math.abs(num) >= 1_000_000) {
+        return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'm';
+    }
+    if (Math.abs(num) >= 1_000) {
+        return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return num.toLocaleString();
+}
+
 export async function handleDiscordInteraction(
     interaction: any, 
     balanceService: BalanceService, 
@@ -32,7 +43,7 @@ export async function handleDiscordInteraction(
                     .filter(s => s.name.toLowerCase().includes(query))
                     .slice(0, 25)
                     .map(s => ({
-                        name: `${s.name} (${s.totalAmount.toLocaleString()} silver)`,
+                        name: `${s.name} (${formatSilver(s.totalAmount)} silver)`,
                         value: s.name
                     }));
 
@@ -133,14 +144,14 @@ export async function handleDiscordInteraction(
                 const { newBalance } = await balanceService.modifyBalance(targetUserId, amount, adminId, 'Adjusted via /bal');
                 const isPositive = amount >= 0;
                 
-                await discordLogService.sendLog(guildId, `💰 <@${adminId}> modified <@${targetUserId}>'s balance by **${isPositive ? '+' : ''}${amount.toLocaleString()}**. New Balance: ${newBalance.toLocaleString()}`);
+                await discordLogService.sendLog(guildId, `💰 <@${adminId}> modified <@${targetUserId}>'s balance by **${isPositive ? '+' : ''}${formatSilver(amount)}**. New Balance: ${formatSilver(newBalance)}`);
 
                 return {
                     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                     data: {
                         embeds: [{
                             title: isPositive ? '📈 Balance Increased' : '📉 Balance Decreased',
-                            description: `<@${targetUserId}>'s balance was updated by **${isPositive ? '+' + amount.toLocaleString() : amount.toLocaleString()}**.\n\n**New Balance:** ${newBalance.toLocaleString()}`,
+                            description: `<@${targetUserId}>'s balance was updated by **${isPositive ? '+' + formatSilver(amount) : formatSilver(amount)}**.\n\n**New Balance:** ${formatSilver(newBalance)}`,
                             color: isPositive ? 0x2ecc71 : 0xe74c3c
                         }]
                     }
@@ -179,7 +190,7 @@ export async function handleDiscordInteraction(
                     data: {
                         embeds: [{
                             title: '💰 Your Wallet',
-                            description: `Your current silver balance is: **${balance.toLocaleString()}**`,
+                            description: `Your current silver balance is: **${formatSilver(balance)}**`,
                             color: 0xf1c40f
                         }]
                     }
@@ -211,7 +222,7 @@ export async function handleDiscordInteraction(
                         data: {
                             embeds: [{
                                 title: `📊 Transaction History`,
-                                description: `No transaction history found for ${targetUsername}.\n\n**Current Balance:** ${currentBalance.toLocaleString()}`,
+                                description: `No transaction history found for ${targetUsername}.\n\n**Current Balance:** ${formatSilver(currentBalance)}`,
                                 color: 0xe74c3c
                             }]
                         }
@@ -224,7 +235,7 @@ export async function handleDiscordInteraction(
                     const sign = isPositive ? '+' : '';
                     const unixTimestamp = Math.floor(new Date(tx.createdAt).getTime() / 1000);
                     const timeString = `<t:${unixTimestamp}:F> (<t:${unixTimestamp}:R>)`;
-                    return `${emoji} **${sign}${tx.amount.toLocaleString()}** (by <@${tx.adminDiscordId}>)\n└ 🕒 ${timeString}`;
+                    return `${emoji} **${sign}${formatSilver(tx.amount)}** (by <@${tx.adminDiscordId}>)\n└ 🕒 ${timeString}`;
                 }).join('\n\n');
 
                 return {
@@ -232,7 +243,7 @@ export async function handleDiscordInteraction(
                     data: {
                         embeds: [{
                             title: `📊 Transaction History`,
-                            description: `**User:** ${targetUsername}\n**Current Balance:** ${currentBalance.toLocaleString()}\n\n**Last 5 transactions:**\n\n${historyStr}`,
+                            description: `**User:** ${targetUsername}\n**Current Balance:** ${formatSilver(currentBalance)}\n\n**Last 5 transactions:**\n\n${historyStr}`,
                             color: 0x3498db
                         }]
                     }
@@ -311,14 +322,14 @@ export async function handleDiscordInteraction(
                     try {
                         const session = await sessionService.updateSession(sessionName, amount);
                         const isPositive = amount >= 0;
-                        await discordLogService.sendLog(guildId, `📝 <@${adminId}> updated session \`${sessionName}\` pool by **${isPositive ? '+' : ''}${amount.toLocaleString()}**. New Total: ${session.totalAmount.toLocaleString()}`);
+                        await discordLogService.sendLog(guildId, `📝 <@${adminId}> updated session \`${sessionName}\` pool by **${isPositive ? '+' : ''}${amount.toLocaleString()}**. New Total: ${formatSilver(session.totalAmount)}`);
 
                         return {
                             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                             data: {
                                 embeds: [{
                                     title: '📝 Party Pool Updated',
-                                    description: `**Session:** ${sessionName}\n**Update:** ${isPositive ? '+' : ''}${amount.toLocaleString()} silver\n${note ? `**Note:** ${note}\n` : ''}\n**New Total Pool:** ${session.totalAmount.toLocaleString()}`,
+                                    description: `**Session:** ${sessionName}\n**Update:** ${isPositive ? '+' : ''}${amount.toLocaleString()} silver\n${note ? `**Note:** ${note}\n` : ''}\n**New Total Pool:** ${formatSilver(session.totalAmount)}`,
                                     color: isPositive ? 0x2ecc71 : 0xe74c3c
                                 }]
                             }
@@ -345,9 +356,9 @@ export async function handleDiscordInteraction(
 
                         const { session, splitAmount, members, skipped, taxAmount } = await sessionService.closeSession(sessionName, adminId, bannedUserIds, guildSettings?.split_tax || 0);
                         
-                        let description = `**Session:** ${sessionName}\n**Final Pool:** ${session.totalAmount.toLocaleString()}`;
+                        let description = `**Session:** ${sessionName}\n**Final Pool:** ${formatSilver(session.totalAmount)}`;
                         if (taxAmount > 0) {
-                            description += `\n**Split Tax Paid to Guild (${guildSettings?.split_tax}%):** ${taxAmount.toLocaleString()}`;
+                            description += `\n**Split Tax Paid to Guild (${guildSettings?.split_tax}%):** ${formatSilver(taxAmount)}`;
                         }
                         description += `\n\n**Split Amount:** +${splitAmount.toLocaleString()} per user\n\n**Recipients:**\n${members.map(id => `<@${id}>`).join(', ') || 'None'}`;
 
@@ -355,7 +366,7 @@ export async function handleDiscordInteraction(
                             description += `\n\n**Skipped (Banned):**\n${skipped.map(id => `<@${id}>`).join(', ')}`;
                         }
 
-                        await discordLogService.sendLog(guildId, `🔒 <@${adminId}> closed session \`${sessionName}\`. Split **${session.totalAmount.toLocaleString()}** silver across ${members.length} members (+${splitAmount.toLocaleString()} each).${taxAmount > 0 ? ` Tax paid: ${taxAmount.toLocaleString()}.` : ''}${skipped.length > 0 ? ` Skipped ${skipped.length} banned users.` : ''}`);
+                        await discordLogService.sendLog(guildId, `🔒 <@${adminId}> closed session \`${sessionName}\`. Split **${formatSilver(session.totalAmount)}** silver across ${members.length} members (+${splitAmount.toLocaleString()} each).${taxAmount > 0 ? ` Tax paid: ${formatSilver(taxAmount)}.` : ''}${skipped.length > 0 ? ` Skipped ${skipped.length} banned users.` : ''}`);
 
                         return {
                             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -430,14 +441,14 @@ export async function handleDiscordInteraction(
                     };
                 }
 
-                const mentionsList = payoutDetails.map(d => `<@${d.id}> (-${d.amount.toLocaleString()})`).join('\n');
+                const mentionsList = payoutDetails.map(d => `<@${d.id}> (-${formatSilver(d.amount)})`).join('\n');
                 
-                let description = `Successfully zeroed out balances for ${payoutDetails.length} users.\n**Total Paid Out:** ${totalPaidOut.toLocaleString()} silver\n**Note:** ${note}\n\n**Recipients:**\n${mentionsList}`;
+                let description = `Successfully zeroed out balances for ${payoutDetails.length} users.\n**Total Paid Out:** ${formatSilver(totalPaidOut)} silver\n**Note:** ${note}\n\n**Recipients:**\n${mentionsList}`;
                 if (skippedBanned.length > 0) {
                     description += `\n\n**Skipped (Banned):**\n${skippedBanned.map(id => `<@${id}>`).join(', ')}`;
                 }
                 
-                await discordLogService.sendLog(guildId, `💸 <@${adminId}> executed an explicit payout command. Zeroed out balances for ${payoutDetails.length} users. Total paid: ${totalPaidOut.toLocaleString()}.${skippedBanned.length > 0 ? ` Skipped ${skippedBanned.length} banned users.` : ''}`);
+                await discordLogService.sendLog(guildId, `💸 <@${adminId}> executed an explicit payout command. Zeroed out balances for ${payoutDetails.length} users. Total paid: ${formatSilver(totalPaidOut)}.${skippedBanned.length > 0 ? ` Skipped ${skippedBanned.length} banned users.` : ''}`);
 
                 return {
                     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -497,7 +508,7 @@ export async function handleDiscordInteraction(
                 }
 
                 const leaderboardStr = leaderboard.map((l, index) => {
-                    return `**${index + 1}.** <@${l.discordId}> - ${l.splitsAttended} splits`;
+                    return `**${index + 1}.** <@${l.discordId}> - ${l.splitsAttended} splits (${l.percentage.toFixed(1)}%)`;
                 }).join('\n');
 
                 return {
