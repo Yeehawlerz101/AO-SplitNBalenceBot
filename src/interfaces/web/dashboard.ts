@@ -2,13 +2,18 @@ import { Hono } from 'hono';
 import { html, raw } from 'hono/html';
 import { BalanceService } from '../../application/services/BalanceService';
 import { SessionService } from '../../application/services/SessionService';
+import { ActivityService } from '../../application/services/ActivityService';
 
-export const webRouter = new Hono<{ Bindings: { DISCORD_TOKEN: string }, Variables: { balanceService: BalanceService, sessionService: SessionService } }>();
+export const webRouter = new Hono<{ Bindings: { DISCORD_TOKEN: string }, Variables: { balanceService: BalanceService, sessionService: SessionService, activityService: ActivityService } }>();
 
 webRouter.get('/', async (c) => {
     const balanceService = c.get('balanceService');
     const sessionService = c.get('sessionService');
-    const usersWithBalances = await balanceService.getAllUsersWithBalances();
+    const activityService = c.get('activityService');
+
+    let usersWithBalances = await balanceService.getAllUsersWithBalances();
+    // Filter out users with 0 balance
+    usersWithBalances = usersWithBalances.filter(u => u.balance !== 0);
 
     const fetchUsername = async (discordId: string) => {
         try {
@@ -19,7 +24,7 @@ webRouter.get('/', async (c) => {
                 const data: any = await res.json();
                 return data.username || discordId;
             }
-        } catch (e) {}
+        } catch (e) {}              
         return discordId;
     };
 
@@ -27,6 +32,17 @@ webRouter.get('/', async (c) => {
         usersWithBalances.map(async u => ({
             ...u,
             username: await fetchUsername(u.discordId)
+        }))
+    );
+
+    // Fetch activity leaderboard (all time)
+    let activityLeaderboard = await activityService.getActivityLeaderboard('1970-01-01', '2099-12-31');
+    activityLeaderboard = activityLeaderboard.filter(a => a.splitsAttended > 0);
+    
+    const activityWithUsernames = await Promise.all(
+        activityLeaderboard.map(async a => ({
+            ...a,
+            username: await fetchUsername(a.discordId)
         }))
     );
 
@@ -46,9 +62,11 @@ webRouter.get('/', async (c) => {
         }))
     );
 
-    // Prepare data for Chart.js
-    const labels = usersWithUsernames.map(u => u.username);
-    const data = usersWithUsernames.map(u => u.balance);
+    const balanceLabels = usersWithUsernames.map(u => u.username);
+    const balanceData = usersWithUsernames.map(u => u.balance);
+
+    const activityLabels = activityWithUsernames.map(a => a.username);
+    const activityData = activityWithUsernames.map(a => a.splitsAttended);
 
     return c.html(html`
         <!DOCTYPE html>
@@ -77,6 +95,7 @@ webRouter.get('/', async (c) => {
             <div class="container-fluid">
                 <h1 class="mb-4">Albion Online Silver Balances</h1>
 
+                <!-- Balances Row -->
                 <div class="row">
                     <div class="col-12 col-lg-7">
                         <div class="card p-3 mb-4">
@@ -109,18 +128,25 @@ webRouter.get('/', async (c) => {
                     </div>
                 </div>
 
+                <!-- Activity & Active Tabs Row -->
                 <div class="row mt-4">
                     <div class="col-12 col-lg-7">
                         <div class="card p-3 mb-4">
+                            <h2 class="h5">Activity Tracker (Splits Attended)</h2>
+                            <div class="chart-container">
+                                <canvas id="activityChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-5">
+                        <div class="card p-3 mb-4">
                             <h2 class="h5">Active Party Tabs</h2>
-                            <p class="text-muted small">Open sessions waiting to be closed and paid out.</p>
                             <table id="activeSplitsTable" class="table table-hover table-striped">
                                 <thead>
                                     <tr>
                                         <th>Session Name</th>
                                         <th>Roster</th>
                                         <th>Status</th>
-                                        <th>Date Started</th>
                                         <th class="text-end">Current Pool</th>
                                     </tr>
                                 </thead>
@@ -135,7 +161,6 @@ webRouter.get('/', async (c) => {
                                                 </small>
                                             </td>
                                             <td><span class="badge text-bg-success">Open</span></td>
-                                            <td>${new Date(s.session.createdAt).toLocaleString()}</td>
                                             <td class="text-end text-success fw-bold">${s.session.totalAmount.toLocaleString()}</td>
                                         </tr>
                                     `)}
@@ -143,10 +168,13 @@ webRouter.get('/', async (c) => {
                             </table>
                         </div>
                     </div>
-                    <div class="col-12 col-lg-5">
+                </div>
+
+                <!-- Issuer Stats Row -->
+                <div class="row mt-4">
+                    <div class="col-12">
                         <div class="card p-3 mb-4">
                             <h2 class="h5">Issuer Statistics</h2>
-                            <p class="text-muted small">Lifetime stats for admins tracking splits.</p>
                             <table id="issuerTable" class="table table-hover table-striped">
                                 <thead>
                                     <tr>
@@ -180,7 +208,7 @@ webRouter.get('/', async (c) => {
                         lengthMenu: [5, 10, 25, 50]
                     });
                     $('#activeSplitsTable').DataTable({
-                        order: [[2, 'desc']],
+                        order: [[3, 'desc']],
                         pageLength: 5,
                         lengthMenu: [5, 10, 25]
                     });
@@ -191,14 +219,14 @@ webRouter.get('/', async (c) => {
                     });
                 });
 
-                const ctx = document.getElementById('balanceChart');
-                new Chart(ctx, {
+                const balCtx = document.getElementById('balanceChart');
+                new Chart(balCtx, {
                     type: 'bar',
                     data: {
-                        labels: ${raw(JSON.stringify(labels))},
+                        labels: ${raw(JSON.stringify(balanceLabels))},
                         datasets: [{
                             label: 'Owed Silver Balance',
-                            data: ${raw(JSON.stringify(data))},
+                            data: ${raw(JSON.stringify(balanceData))},
                             backgroundColor: 'rgba(75, 192, 192, 0.2)',
                             borderColor: 'rgba(75, 192, 192, 1)',
                             borderWidth: 1
@@ -208,9 +236,31 @@ webRouter.get('/', async (c) => {
                         responsive: true,
                         maintainAspectRatio: false,
                         scales: {
-                            y: {
-                                beginAtZero: true
-                            }
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+
+                const actCtx = document.getElementById('activityChart');
+                new Chart(actCtx, {
+                    type: 'line',
+                    data: {
+                        labels: ${raw(JSON.stringify(activityLabels))},
+                        datasets: [{
+                            label: 'Splits Attended',
+                            data: ${raw(JSON.stringify(activityData))},
+                            backgroundColor: 'rgba(129, 140, 248, 0.2)',
+                            borderColor: 'rgba(129, 140, 248, 1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true }
                         }
                     }
                 });
