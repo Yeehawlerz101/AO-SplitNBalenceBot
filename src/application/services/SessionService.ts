@@ -91,4 +91,12 @@ export class SessionService {
             taxAmount
         };
     }
+    async cancelSession(name: string): Promise<SplitSession> {
+        const session = await this.sessionRepo.getSession(name);
+        if (!session) throw new Error(`Session "${name}" not found.`);
+        if (session.status === 'closed') throw new Error(`Session "${name}" is already closed and cannot be cancelled.`);
+
+        await this.sessionRepo.deleteSession(name);
+        return session;
+    }
 }

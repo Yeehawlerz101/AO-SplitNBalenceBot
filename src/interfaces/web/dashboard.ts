@@ -35,8 +35,19 @@ webRouter.get('/', async (c) => {
         }))
     );
 
-    // Fetch activity leaderboard (all time)
-    let activityLeaderboard = await activityService.getActivityLeaderboard('1970-01-01', '2099-12-31');
+    const days = c.req.query('days') || 'lifetime';
+    let startDate = '1970-01-01';
+    if (days !== 'lifetime') {
+        const numDays = parseInt(days, 10);
+        if (!isNaN(numDays)) {
+            const date = new Date();
+            date.setDate(date.getDate() - numDays);
+            startDate = date.toISOString().split('T')[0];
+        }
+    }
+
+    // Fetch activity leaderboard
+    let activityLeaderboard = await activityService.getActivityLeaderboard(startDate, '2099-12-31');
     activityLeaderboard = activityLeaderboard.filter(a => a.splitsAttended > 0);
     
     const activityWithUsernames = await Promise.all(
@@ -62,8 +73,19 @@ webRouter.get('/', async (c) => {
         }))
     );
 
-    const balanceLabels = usersWithUsernames.map(u => u.username);
-    const balanceData = usersWithUsernames.map(u => u.balance);
+    const currentBalanceLabels = usersWithUsernames.map(u => u.username);
+    const currentBalanceData = usersWithUsernames.map(u => u.balance);
+
+    const earnings = await balanceService.getEarningsPerUser(startDate, '2099-12-31');
+    const earningsWithUsernames = await Promise.all(
+        earnings.map(async e => ({
+            ...e,
+            username: await fetchUsername(e.discordId)
+        }))
+    );
+
+    const balanceLabels = earningsWithUsernames.map(e => e.username);
+    const balanceData = earningsWithUsernames.map(e => e.earned);
 
     const activityLabels = activityWithUsernames.map(a => a.username);
     const activityData = activityWithUsernames.map(a => a.splitsAttended);
@@ -99,7 +121,28 @@ webRouter.get('/', async (c) => {
                 <div class="row">
                     <div class="col-12 col-lg-7">
                         <div class="card p-3 mb-4">
-                            <h2 class="h5">Balance Overview</h2>
+                            <h2 class="h5">Current Owed Balance</h2>
+                            <div class="chart-container">
+                                <canvas id="currentBalanceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Silver Earned Row -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card p-3 mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h2 class="h5 mb-0">Silver Earned Overview</h2>
+                                <select class="form-select form-select-sm w-auto" onchange="window.location.search = '?days=' + this.value">
+                                    <option value="7" ${days === '7' ? 'selected' : ''}>Last 7 Days</option>
+                                    <option value="30" ${days === '30' ? 'selected' : ''}>Last 30 Days</option>
+                                    <option value="60" ${days === '60' ? 'selected' : ''}>Last 60 Days</option>
+                                    <option value="90" ${days === '90' ? 'selected' : ''}>Last 90 Days</option>
+                                    <option value="lifetime" ${days === 'lifetime' ? 'selected' : ''}>Lifetime</option>
+                                </select>
+                            </div>
                             <div class="chart-container">
                                 <canvas id="balanceChart"></canvas>
                             </div>
@@ -113,6 +156,7 @@ webRouter.get('/', async (c) => {
                                     <tr>
                                         <th>Discord ID</th>
                                         <th class="text-end">Owed Balance</th>
+                                        <th class="text-end">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -120,6 +164,9 @@ webRouter.get('/', async (c) => {
                                         <tr>
                                             <td>${u.username}</td>
                                             <td class="text-end text-warning fw-bold">${u.balance.toLocaleString()}</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-danger wipe-btn" data-id="${u.discordId}">Wipe</button>
+                                            </td>
                                         </tr>
                                     `)}
                                 </tbody>
@@ -132,7 +179,16 @@ webRouter.get('/', async (c) => {
                 <div class="row mt-4">
                     <div class="col-12 col-lg-7">
                         <div class="card p-3 mb-4">
-                            <h2 class="h5">Activity Tracker (Splits Attended)</h2>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h2 class="h5 mb-0">Activity Tracker (Splits Attended)</h2>
+                                <select class="form-select form-select-sm w-auto" id="dateFilter" onchange="window.location.search = '?days=' + this.value">
+                                    <option value="7" ${days === '7' ? 'selected' : ''}>Last 7 Days</option>
+                                    <option value="30" ${days === '30' ? 'selected' : ''}>Last 30 Days</option>
+                                    <option value="60" ${days === '60' ? 'selected' : ''}>Last 60 Days</option>
+                                    <option value="90" ${days === '90' ? 'selected' : ''}>Last 90 Days</option>
+                                    <option value="lifetime" ${days === 'lifetime' ? 'selected' : ''}>Lifetime</option>
+                                </select>
+                            </div>
                             <div class="chart-container">
                                 <canvas id="activityChart"></canvas>
                             </div>
@@ -217,6 +273,40 @@ webRouter.get('/', async (c) => {
                         pageLength: 5,
                         lengthMenu: [5, 10, 25]
                     });
+
+                    $('.wipe-btn').on('click', function() {
+                        const id = $(this).data('id');
+                        if (confirm('Are you sure you want to forcibly wipe this user\\'s balance to 0?')) {
+                            $.post('/api/admin/wipe/' + id, function() {
+                                location.reload();
+                            });
+                        }
+                    });
+                });
+
+                const currentBalanceLabels = ${raw(JSON.stringify(currentBalanceLabels))};
+                const currentBalanceData = ${raw(JSON.stringify(currentBalanceData))};
+                
+                const currentBalCtx = document.getElementById('currentBalanceChart');
+                new Chart(currentBalCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: currentBalanceLabels,
+                        datasets: [{
+                            label: 'Current Owed Balance',
+                            data: currentBalanceData,
+                            backgroundColor: currentBalanceData.map(v => v >= 0 ? 'rgba(231, 76, 60, 0.6)' : 'rgba(46, 204, 113, 0.6)'),
+                            borderColor: currentBalanceData.map(v => v >= 0 ? 'rgba(231, 76, 60, 1)' : 'rgba(46, 204, 113, 1)'),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
                 });
 
                 const balCtx = document.getElementById('balanceChart');
@@ -225,7 +315,7 @@ webRouter.get('/', async (c) => {
                     data: {
                         labels: ${raw(JSON.stringify(balanceLabels))},
                         datasets: [{
-                            label: 'Owed Silver Balance',
+                            label: 'Silver Earned',
                             data: ${raw(JSON.stringify(balanceData))},
                             backgroundColor: 'rgba(75, 192, 192, 0.2)',
                             borderColor: 'rgba(75, 192, 192, 1)',

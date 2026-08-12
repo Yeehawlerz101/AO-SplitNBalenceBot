@@ -63,4 +63,25 @@ export class D1TransactionRepository implements ITransactionRepository {
             recentDate: row.recent_date
         }));
     }
+
+    async getEarningsPerUser(startDate: string, endDate: string): Promise<Array<{discordId: string, earned: number}>> {
+        // We ensure endDate includes the whole day if it's just a date string.
+        const endDateTime = endDate.length === 10 ? endDate + 'T23:59:59.999Z' : endDate;
+        
+        const { results } = await this.db.prepare(`
+            SELECT u.discord_id, SUM(t.amount) as earned
+            FROM transactions t
+            JOIN wallets w ON t.wallet_id = w.id
+            JOIN users u ON w.user_id = u.id
+            WHERE t.amount > 0
+            AND t.created_at >= ? AND t.created_at <= ?
+            GROUP BY u.discord_id
+            ORDER BY earned DESC
+        `).bind(startDate, endDateTime).all<{discord_id: string, earned: number}>();
+
+        return results.map(row => ({
+            discordId: row.discord_id,
+            earned: row.earned
+        }));
+    }
 }

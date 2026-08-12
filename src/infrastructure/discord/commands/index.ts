@@ -125,6 +125,7 @@ export async function handleDiscordInteraction(
             case 'setlog': {
                 const channelId = options?.find((o: any) => o.name === 'channel')?.value;
                 await settingsService.setLogChannel(guildId, channelId);
+                await discordLogService.sendLog(guildId, `⚙️ <@${adminId}> set the audit log channel to <#${channelId}>.`);
                 return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `Audit logs will now be sent to <#${channelId}>.` } };
             }
             case 'bal': {
@@ -255,7 +256,7 @@ export async function handleDiscordInteraction(
                     data: {
                         embeds: [{
                             title: '📚 AO-SplitNBalenceBot Help & Setup',
-                            description: `Welcome to the official Albion Online Loot Splitting and Balance Bot!\n\nThis bot acts as a central treasury ledger, allowing your guild to easily track who is owed silver from fame farms, ganking sessions, and Avalonian roads.\n\n### 🔧 Initial Setup\n1. Use \`/perms\` to allow your Officer roles to have \`Admin\` access.\n2. Use \`/setlog\` to bind a text channel so all splits and balance changes are recorded for transparency.\n3. Head to the web dashboard to see all balances and active tabs at a glance!\n\n### ⚔️ Active Party Sessions (Splits)\nRun these commands during an active play session to track loot dynamically:\n- \`/split start\` - Start an active party and tag members (e.g., \`users: @Bob @Alice\`).\n- \`/split update\` - Add or subtract silver from the party's running pool.\n- \`/split close\` - Close the party. The pool is divided equally and added to the members' balances!\n\n*Note: Users with the \`Banned\` role are automatically skipped during split calculations.*\n\n### 💰 Ledger Management\n- \`/bal\` - (Admin) Manually adjust a user's owed balance (can be positive or negative).\n- \`/close\` - (Admin) Explicitly pay out users and zero out their balances. Use this after trading them in-game!\n- \`/wipe\` - (Admin) Forcibly wipe a user's balance to zero without tracking it as a payout.\n- \`/wallet\` - Check your own current silver balance.\n- \`/history\` - View the last 5 transactions for any user.\n\n### ⚙️ Admin Tools\n- \`/perms\` - Grant or revoke \`Admin\`, \`Split Manager\`, or \`Banned\` access to a Discord role.\n- \`/setlog\` - Set the audit log channel.`,
+                            description: `Welcome to the official Albion Online Loot Splitting and Balance Bot!\n\nThis bot acts as a central treasury ledger, allowing your guild to easily track who is owed silver from fame farms, ganking sessions, and Avalonian roads.\n\n### 🔧 Initial Setup\n1. Use \`/perms\` to allow your Officer roles to have \`Admin\` access.\n2. Use \`/setlog\` to bind a text channel so all splits and balance changes are recorded for transparency.\n3. Head to the web dashboard to see all balances and active tabs at a glance!\n\n### ⚔️ Active Party Sessions (Splits)\nRun these commands during an active play session to track loot dynamically:\n- \`/split start\` - Start an active party and tag members (e.g., \`users: @Bob @Alice\`).\n- \`/split update\` - Add or subtract silver from the party's running pool.\n- \`/split close\` - Close the party. The pool is divided equally and added to the members' balances!\n- \`/split cancel\` - Cancel an active party without paying anyone out. Useful for mistakes!\n\n*Note: Users with the \`Banned\` role are automatically skipped during split calculations.*\n\n### 💰 Ledger Management\n- \`/bal\` - (Admin) Manually adjust a user's owed balance (can be positive or negative).\n- \`/close\` - (Admin) Explicitly pay out users and zero out their balances. Use this after trading them in-game!\n- \`/wipe\` - (Admin) Forcibly wipe a user's balance to zero without tracking it as a payout.\n- \`/wallet\` - Check your own current silver balance.\n- \`/history\` - View the last 5 transactions for any user.\n\n### ⚙️ Admin Tools\n- \`/perms\` - Grant or revoke \`Admin\`, \`Split Manager\`, or \`Banned\` access to a Discord role.\n- \`/setlog\` - Set the audit log channel.\n- \`/config bind-channel\` - Bind split commands to a specific channel.\n- \`/config split-tax\` - Set a % tax that gets deducted from splits and paid to the guild!`,
                             color: 0x3498db
                         }]
                     }
@@ -383,6 +384,28 @@ export async function handleDiscordInteraction(
                     }
                 }
 
+                                else if (subName === 'cancel') {
+                    const sessionName = subOptions?.find((o: any) => o.name === 'name')?.value;
+
+                    try {
+                        const session = await sessionService.cancelSession(sessionName);
+                        await discordLogService.sendLog(guildId, `🚫 <@${adminId}> **CANCELLED** session \`${sessionName}\`. The pool (${formatSilver(session.totalAmount)}) was discarded and no payouts were made.`);
+
+                        return {
+                            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                            data: {
+                                embeds: [{
+                                    title: '🚫 Party Cancelled',
+                                    description: `**Session:** ${sessionName}\nThe session was cancelled. No silver was distributed to members.`,
+                                    color: 0xe74c3c
+                                }]
+                            }
+                        };
+                    } catch (err: any) {
+                        return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: err.message } };
+                    }
+                }
+
                 return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Invalid split subcommand' } };
             }
             case 'close': {
@@ -472,6 +495,7 @@ export async function handleDiscordInteraction(
                         return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please mention a valid channel (e.g. <#channel-id>).' } };
                     }
                     await settingsService.setBindChannel(guildId, channelId);
+                    await discordLogService.sendLog(guildId, `⚙️ <@${adminId}> bound split commands to <#${channelId}>.`);
                     return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `Successfully bound split commands to <#${channelId}>.` } };
                 } else if (setting === 'split-tax') {
                     const taxNum = parseFloat(value);
@@ -479,6 +503,7 @@ export async function handleDiscordInteraction(
                         return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Please provide a valid tax percentage between 0 and 100.' } };
                     }
                     await settingsService.setSplitTax(guildId, taxNum);
+                    await discordLogService.sendLog(guildId, `⚙️ <@${adminId}> set the split tax to **${taxNum}%**.`);
                     return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: `Successfully set split tax to **${taxNum}%**.` } };
                 }
                 return { type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { content: 'Unknown configuration setting.' } };

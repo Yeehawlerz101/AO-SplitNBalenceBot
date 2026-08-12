@@ -10,6 +10,7 @@ import { BalanceService } from './application/services/BalanceService';
 import { SessionService } from './application/services/SessionService';
 import { SettingsService } from './application/services/SettingsService';
 import { ActivityService } from './application/services/ActivityService';
+import { DiscordLogService } from './application/services/DiscordLogService';
 
 export interface Env {
     DB: D1Database;
@@ -18,7 +19,7 @@ export interface Env {
     DISCORD_TOKEN: string;
 }
 
-const app = new Hono<{ Bindings: Env; Variables: { balanceService: BalanceService; sessionService: SessionService; settingsService: SettingsService; activityService: ActivityService } }>();
+const app = new Hono<{ Bindings: Env; Variables: { balanceService: BalanceService; sessionService: SessionService; settingsService: SettingsService; activityService: ActivityService; discordLogService: DiscordLogService } }>();
 
 app.use('*', async (c, next) => {
     const userRepo = new D1UserRepository(c.env.DB);
@@ -30,11 +31,13 @@ app.use('*', async (c, next) => {
     const sessionService = new SessionService(sessionRepo, balanceService);
     const settingsService = new SettingsService(c.env.DB);
     const activityService = new ActivityService(c.env.DB);
+    const discordLogService = new DiscordLogService(settingsService, c.env.DISCORD_TOKEN);
 
     c.set('balanceService', balanceService);
     c.set('sessionService', sessionService);
     c.set('settingsService', settingsService);
     c.set('activityService', activityService);
+    c.set('discordLogService', discordLogService);
     await next();
 });
 

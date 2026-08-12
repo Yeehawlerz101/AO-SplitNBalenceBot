@@ -39,8 +39,13 @@ discordRouter.post('/interaction', async (c) => {
     const activityService = c.get('activityService');
     const discordLogService = new DiscordLogService(settingsService, c.env.DISCORD_TOKEN);
 
-    const response = await handleDiscordInteraction(interaction, balanceService, sessionService, settingsService, activityService, discordLogService, c.env.DISCORD_APPLICATION_ID);
+    const response: any = await handleDiscordInteraction(interaction, balanceService, sessionService, settingsService, activityService, discordLogService, c.env.DISCORD_APPLICATION_ID);
     
+    if (response.deferredCallback) {
+        c.executionCtx.waitUntil(response.deferredCallback());
+        delete response.deferredCallback; // Don't send this in the JSON
+    }
+
     console.log('--- SENDING RESPONSE ---');
     console.log(JSON.stringify(response, null, 2));
     

@@ -43,6 +43,13 @@ export class SettingsService {
         return result || null;
     }
 
+    async getFirstGuildId(): Promise<string | null> {
+        const result = await this.db.prepare(
+            "SELECT guild_id FROM guild_settings LIMIT 1"
+        ).first<{guild_id: string}>();
+        return result?.guild_id || null;
+    }
+
     async setBindChannel(guildId: string, channelId: string): Promise<void> {
         await this.db.prepare(
             "INSERT INTO guild_settings (guild_id, bind_channel_id) VALUES (?, ?) ON CONFLICT(guild_id) DO UPDATE SET bind_channel_id = excluded.bind_channel_id"

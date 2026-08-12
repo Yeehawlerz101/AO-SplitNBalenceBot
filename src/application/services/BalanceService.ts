@@ -18,6 +18,10 @@ export class BalanceService {
         adminDiscordId: string, 
         reason?: string
     ): Promise<{ newBalance: number, transactionId: string }> {
+        if (!/^\d+$/.test(targetDiscordId)) {
+            throw new Error(`Invalid Discord ID: ${targetDiscordId}. Discord IDs must be strictly numeric.`);
+        }
+
         let user = await this.userRepo.findByDiscordId(targetDiscordId);
         
         if (!user) {
@@ -117,5 +121,12 @@ export class BalanceService {
      */
     async getLootSplitStats(): Promise<Array<{note: string, totalAmount: number, splitCount: number, recentDate: string}>> {
         return await this.transactionRepo.getLootSplitStats();
+    }
+
+    /**
+     * Gets earnings per user over a time period (sum of positive transactions).
+     */
+    async getEarningsPerUser(startDate: string, endDate: string): Promise<Array<{discordId: string, earned: number}>> {
+        return await this.transactionRepo.getEarningsPerUser(startDate, endDate);
     }
 }

@@ -6,7 +6,7 @@ const commands = [
       {
         name: 'user',
         description: 'Mention the user whose balance you want to modify (e.g. @Username)',
-        type: 3, // STRING type
+        type: 6, // USER type
         required: true,
       },
       {
@@ -24,7 +24,7 @@ const commands = [
       {
         name: 'user',
         description: 'Mention the user whose balance you want to wipe (e.g. @Username)',
-        type: 3, // STRING type
+        type: 6, // USER type
         required: true,
       },
     ],
@@ -40,7 +40,7 @@ const commands = [
       {
         name: 'user',
         description: 'Mention the user whose history you want to see (e.g. @Username)',
-        type: 3, // STRING type
+        type: 6, // USER type
         required: false,
       },
     ],
@@ -106,6 +106,20 @@ const commands = [
           {
             name: 'name',
             description: 'The name of the active split session to close',
+            type: 3, // STRING
+            required: true,
+            autocomplete: true,
+          },
+        ]
+      },
+      {
+        name: 'cancel',
+        description: 'Cancel an active split session without paying anyone out',
+        type: 1, // SUB_COMMAND
+        options: [
+          {
+            name: 'name',
+            description: 'The name of the active split session to cancel',
             type: 3, // STRING
             required: true,
             autocomplete: true,

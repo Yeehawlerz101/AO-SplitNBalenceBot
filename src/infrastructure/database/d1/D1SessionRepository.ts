@@ -78,4 +78,11 @@ export class D1SessionRepository implements ISessionRepository {
             discordId: r.discord_id
         }));
     }
+
+    async deleteSession(name: string): Promise<void> {
+        await this.db.batch([
+            this.db.prepare("DELETE FROM split_members WHERE session_name = ?").bind(name),
+            this.db.prepare("DELETE FROM split_sessions WHERE name = ?").bind(name)
+        ]);
+    }
 }
