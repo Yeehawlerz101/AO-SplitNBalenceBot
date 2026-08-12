@@ -75,10 +75,10 @@ export class SessionService {
         const poolAfterTax = session.totalAmount - taxAmount;
         const splitAmount = Math.floor(poolAfterTax / validMembers.length);
 
-        // Distribute funds only to valid members
-        await Promise.all(validMembers.map(m => 
-            this.balanceService.modifyBalance(m.discordId, splitAmount, adminDiscordId, `Split: ${name}`)
-        ));
+        // Distribute funds only to valid members sequentially to avoid D1 lock errors
+        for (const m of validMembers) {
+            await this.balanceService.modifyBalance(m.discordId, splitAmount, adminDiscordId, `Split: ${name}`);
+        }
 
         await this.sessionRepo.closeSession(name);
         const closedSession = (await this.sessionRepo.getSession(name))!;
