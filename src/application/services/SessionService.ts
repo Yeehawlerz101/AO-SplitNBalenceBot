@@ -25,6 +25,19 @@ export class SessionService {
         return result;
     }
 
+    async getAllSessionsWithMembers(): Promise<{session: SplitSession, members: string[]}[]> {
+        const sessions = await this.sessionRepo.getAllSessions();
+        const result = [];
+        for (const s of sessions) {
+            const members = await this.sessionRepo.getMembers(s.name);
+            result.push({
+                session: s,
+                members: members.map(m => m.discordId)
+            });
+        }
+        return result;
+    }
+
     async startSession(name: string, discordIds: string[]): Promise<SplitSession> {
         const existing = await this.sessionRepo.getSession(name);
         if (existing && existing.status === 'open') {

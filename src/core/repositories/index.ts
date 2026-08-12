@@ -27,6 +27,7 @@ export interface ISessionRepository {
     createSession(name: string): Promise<SplitSession>;
     getSession(name: string): Promise<SplitSession | null>;
     getOpenSessions(): Promise<SplitSession[]>;
+    getAllSessions(): Promise<SplitSession[]>;
     updateSessionAmount(name: string, amountToAdd: number): Promise<void>;
     closeSession(name: string): Promise<void>;
     

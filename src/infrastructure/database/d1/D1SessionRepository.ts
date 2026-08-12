@@ -42,6 +42,19 @@ export class D1SessionRepository implements ISessionRepository {
         }));
     }
 
+    async getAllSessions(): Promise<SplitSession[]> {
+        const { results } = await this.db.prepare(
+            "SELECT * FROM split_sessions ORDER BY CASE WHEN status = 'open' THEN 0 ELSE 1 END, created_at DESC LIMIT 50"
+        ).all<{name: string, total_amount: number, status: 'open' | 'closed', created_at: string}>();
+
+        return results.map(r => ({
+            name: r.name,
+            totalAmount: r.total_amount,
+            status: r.status,
+            createdAt: new Date(r.created_at)
+        }));
+    }
+
     async updateSessionAmount(name: string, amountToAdd: number): Promise<void> {
         await this.db.prepare(
             "UPDATE split_sessions SET total_amount = total_amount + ? WHERE name = ?"
