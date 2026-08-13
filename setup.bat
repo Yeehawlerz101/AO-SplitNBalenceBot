@@ -58,9 +58,9 @@ echo.
 echo    (Note: For production, you will also need to add your 
 echo     secrets to Cloudflare by running the following commands:)
 echo.
-echo    wrangler secret put DISCORD_TOKEN
-echo    wrangler secret put DISCORD_APPLICATION_ID
-echo    wrangler secret put DISCORD_PUBLIC_KEY
+echo    npx wrangler secret put DISCORD_TOKEN
+echo    npx wrangler secret put DISCORD_APPLICATION_ID
+echo    npx wrangler secret put DISCORD_PUBLIC_KEY
 echo.
 echo ========================================================
 echo Bot Invite Link:
