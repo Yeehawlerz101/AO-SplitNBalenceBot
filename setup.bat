@@ -29,6 +29,24 @@ node scripts/register-commands.js
 
 echo.
 echo ========================================================
+echo Database Migrations
+echo ========================================================
+echo.
+set /p DO_MIGRATE="Would you like to automatically apply database schema migrations? (Y/N): "
+if /I "%DO_MIGRATE%"=="Y" (
+    echo.
+    echo Applying migrations to LOCAL development database...
+    call npx wrangler d1 migrations apply albion-balances --local
+    echo.
+    echo Applying migrations to REMOTE production database...
+    call npx wrangler d1 migrations apply albion-balances --remote
+) else (
+    echo.
+    echo Skipping database migrations.
+)
+
+echo.
+echo ========================================================
 echo Setup Complete!
 echo.
 echo 1. You can now test the bot locally by running:
