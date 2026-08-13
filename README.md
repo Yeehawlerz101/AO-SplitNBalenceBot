@@ -13,30 +13,36 @@ A robust Discord bot and web dashboard built on Cloudflare Workers and D1 Databa
 
 ## 🚀 Setup & Installation (Cloudflare Workers)
 
+### For Windows Users (Automated)
+Simply run `setup.bat`! The wizard will prompt you for your Discord Bot credentials, install dependencies, register your slash commands, and apply your D1 database migrations. 
+
+To update the bot later, just run `update.bat`.
+
+### Manual Setup
 1. **Clone the Repo** and run `npm install`.
 2. **Create a D1 Database** in your Cloudflare dashboard and bind it in `wrangler.toml`:
    ```toml
    [[d1_databases]]
    binding = "DB"
-   database_name = "YOUR_DATABASE_NAME"
+   database_name = "albion-balances"
    database_id = "YOUR_DATABASE_ID"
+   migrations_dir = "migrations"
    ```
-3. **Execute Migrations** to build the database schema:
-   ```bash
-   npx wrangler d1 execute DB --remote --file=schema.sql
-   npx wrangler d1 execute DB --remote --file=src/infrastructure/database/migrations/001_sessions.sql
-   npx wrangler d1 execute DB --remote --file=src/infrastructure/database/migrations/002_perms_and_logs.sql
-   ```
-4. **Configure Secrets**: Create a `.dev.vars` file (for local dev) and run `npx wrangler secret put` (for production) with the following:
-   ```
-   DISCORD_PUBLIC_KEY="your_public_key"
-   DISCORD_APPLICATION_ID="your_app_id"
-   DISCORD_TOKEN="your_bot_token"
-   ```
+3. **Configure Secrets**: 
+   - **Local Development**: Create a `.dev.vars` file in the root with:
+     ```env
+     DISCORD_PUBLIC_KEY="your_public_key"
+     DISCORD_APPLICATION_ID="your_app_id"
+     DISCORD_TOKEN="your_bot_token"
+     ```
+   - **Production**: Run `npx wrangler secret put DISCORD_TOKEN` (and the others) to store them securely.
+4. **Execute Migrations** to build the database schema:
+   - Local: `npx wrangler d1 migrations apply albion-balances --local`
+   - Remote: `npx wrangler d1 migrations apply albion-balances --remote`
 5. **Deploy & Register**: 
-   - Deploy your worker: `npx wrangler deploy`
-   - Grab your Worker URL and paste it into the **Interactions Endpoint URL** field in the Discord Developer Portal.
    - Register the slash commands: `npm run register`
+   - Deploy your worker: `npm run deploy`
+   - Grab your Worker URL and paste it into the **Interactions Endpoint URL** field in the Discord Developer Portal.
 
 ---
 
