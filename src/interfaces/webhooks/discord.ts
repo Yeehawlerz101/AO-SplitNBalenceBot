@@ -5,9 +5,10 @@ import { SessionService } from '../../application/services/SessionService';
 import { SettingsService } from '../../application/services/SettingsService';
 import { DiscordLogService } from '../../application/services/DiscordLogService';
 import { ActivityService } from '../../application/services/ActivityService';
+import { UserService } from '../../application/services/UserService';
 import { handleDiscordInteraction } from '../../infrastructure/discord/commands';
 
-export const discordRouter = new Hono<{ Bindings: { DISCORD_PUBLIC_KEY: string, DISCORD_APPLICATION_ID: string, DISCORD_TOKEN: string }, Variables: { balanceService: BalanceService, sessionService: SessionService, settingsService: SettingsService, activityService: ActivityService } }>();
+export const discordRouter = new Hono<{ Bindings: { DISCORD_PUBLIC_KEY: string, DISCORD_APPLICATION_ID: string, DISCORD_TOKEN: string }, Variables: { balanceService: BalanceService, sessionService: SessionService, settingsService: SettingsService, activityService: ActivityService, userService: UserService } }>();
 
 discordRouter.post('/interaction', async (c) => {
     const signature = c.req.header('x-signature-ed25519');
@@ -37,9 +38,10 @@ discordRouter.post('/interaction', async (c) => {
     const sessionService = c.get('sessionService');
     const settingsService = c.get('settingsService');
     const activityService = c.get('activityService');
+    const userService = c.get('userService');
     const discordLogService = new DiscordLogService(settingsService, c.env.DISCORD_TOKEN);
 
-    const response: any = await handleDiscordInteraction(interaction, balanceService, sessionService, settingsService, activityService, discordLogService, c.env.DISCORD_APPLICATION_ID);
+    const response: any = await handleDiscordInteraction(interaction, balanceService, sessionService, settingsService, activityService, discordLogService, userService, c.env.DISCORD_APPLICATION_ID, c.env.DISCORD_TOKEN);
     
     if (response.deferredCallback) {
         c.executionCtx.waitUntil(response.deferredCallback());

@@ -1,6 +1,7 @@
 export interface User {
     id: string; // e.g., user_abc123
     discordId: string;
+    username?: string; // Cached from Discord — updated on every bot interaction
     createdAt: string; // ISO 8601 string
 }
 

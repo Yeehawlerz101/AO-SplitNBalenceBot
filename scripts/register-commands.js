@@ -235,6 +235,11 @@ const commands = [
         required: true
       }
     ]
+  },
+  {
+    name: 'syncnames',
+    description: '(Admin) Sync Discord usernames for all users in the database.',
+    options: []
   }
 ];
 

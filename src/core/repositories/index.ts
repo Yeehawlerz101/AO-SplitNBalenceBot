@@ -4,6 +4,12 @@ export interface IUserRepository {
     findById(id: string): Promise<User | null>;
     findByDiscordId(discordId: string): Promise<User | null>;
     create(user: User): Promise<void>;
+    /** Cache the username for a known Discord user. */
+    upsertUsername(discordId: string, username: string): Promise<void>;
+    /** Batch-fetch cached usernames; returns a map of discordId → username. */
+    getUsernamesByDiscordIds(discordIds: string[]): Promise<Map<string, string>>;
+    /** Returns all discord IDs that have no cached username yet. */
+    getDiscordIdsWithoutUsernames(): Promise<string[]>;
 }
 
 export interface IWalletRepository {

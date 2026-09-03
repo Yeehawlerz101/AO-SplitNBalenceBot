@@ -4,6 +4,7 @@ import { SessionService } from '../../../application/services/SessionService';
 import { SettingsService } from '../../../application/services/SettingsService';
 import { ActivityService } from '../../../application/services/ActivityService';
 import { DiscordLogService } from '../../../application/services/DiscordLogService';
+import { UserService } from '../../../application/services/UserService';
 
 
 function formatSilver(num: number): string {
@@ -23,7 +24,9 @@ export async function handleDiscordInteraction(
     settingsService: SettingsService,
     activityService: ActivityService,
     discordLogService: DiscordLogService,
-    applicationId: string
+    userService: UserService,
+    applicationId: string,
+    discordToken: string
 ) {
     if (interaction.type === InteractionType.PING) {
         return { type: InteractionResponseType.PONG };
@@ -62,6 +65,12 @@ export async function handleDiscordInteraction(
         const member = interaction.member;
         const adminId = member?.user?.id || interaction.user?.id;
 
+        // Write-through username cache — fire and forget, never blocks the response
+        const interactionUsername = member?.user?.global_name || member?.user?.username || interaction.user?.global_name || interaction.user?.username;
+        if (adminId && interactionUsername) {
+            userService.upsertUsername(adminId, interactionUsername).catch(() => {});
+        }
+
         const guildSettings = await settingsService.getGuildSettings(guildId);
         
         // PERMISSION MIDDLEWARE
@@ -76,7 +85,7 @@ export async function handleDiscordInteraction(
             if (!allowed) {
                 // Determine required perms based on command
                 let reqPerms: string[] = [];
-                if (['bal', 'wipe', 'perms', 'setlog', 'invite', 'config'].includes(name)) reqPerms = ['ADMIN'];
+                if (['bal', 'wipe', 'perms', 'setlog', 'invite', 'config', 'syncnames'].includes(name)) reqPerms = ['ADMIN'];
                 if (name === 'split' || name === 'close') reqPerms = ['ADMIN', 'SPLIT_MANAGER'];
 
                 // Commands that everyone can run
@@ -544,6 +553,23 @@ export async function handleDiscordInteraction(
                             description: leaderboardStr,
                             color: 0x3498db
                         }]
+                    }
+                };
+            }
+            case 'syncnames': {
+                return {
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: { content: '⏳ Syncing usernames from Discord API... this may take a moment.', flags: 64 },
+                    deferredCallback: async () => {
+                        const result = await userService.syncAllUsernames(discordToken);
+                        const msg = result.total === 0
+                            ? '✅ All usernames are already synced — nothing to do!'
+                            : `✅ Username sync complete! Synced **${result.synced}** of **${result.total}** users (${result.failed} could not be resolved).`;
+                        await fetch(`https://discord.com/api/v10/webhooks/${applicationId}/${interaction.token}/messages/@original`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: msg })
+                        });
                     }
                 };
             }

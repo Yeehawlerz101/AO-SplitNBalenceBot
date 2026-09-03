@@ -3,42 +3,33 @@ import { html, raw } from 'hono/html';
 import { BalanceService } from '../../application/services/BalanceService';
 import { SessionService } from '../../application/services/SessionService';
 import { ActivityService } from '../../application/services/ActivityService';
+import { UserService } from '../../application/services/UserService';
 
-export const webRouter = new Hono<{ Bindings: { DISCORD_TOKEN: string }, Variables: { balanceService: BalanceService, sessionService: SessionService, activityService: ActivityService } }>();
+export const webRouter = new Hono<{ Bindings: { DISCORD_TOKEN: string }, Variables: { balanceService: BalanceService, sessionService: SessionService, activityService: ActivityService, userService: UserService } }>();
 
 webRouter.get('/', async (c) => {
     const balanceService = c.get('balanceService');
     const sessionService = c.get('sessionService');
     const activityService = c.get('activityService');
+    const userService = c.get('userService');
 
     let usersWithBalances = await balanceService.getAllUsersWithBalances();
     // Filter out users with 0 balance
     usersWithBalances = usersWithBalances.filter(u => u.balance !== 0);
 
-    const usernameCache = new Map<string, string>();
-    const fetchUsername = async (discordId: string) => {
-        if (usernameCache.has(discordId)) return usernameCache.get(discordId);
-        try {
-            const res = await fetch(`https://discord.com/api/v10/users/${discordId}`, {
-                headers: { Authorization: `Bot ${c.env.DISCORD_TOKEN}` }
-            });
-            if (res.ok) {
-                const data: any = await res.json();
-                const name = data.username || discordId;
-                usernameCache.set(discordId, name);
-                return name;
-            }
-        } catch (e) { }
-        usernameCache.set(discordId, discordId);
-        return discordId;
-    };
+    // Collect all Discord IDs needed across every section of the page
+    const allDiscordIds = [
+        ...usersWithBalances.map(u => u.discordId),
+    ];
 
-    const usersWithUsernames = await Promise.all(
-        usersWithBalances.map(async u => ({
-            ...u,
-            username: await fetchUsername(u.discordId)
-        }))
-    );
+    // Single batch DB query + targeted API fallback for cache misses
+    const usernameMap = await userService.resolveUsernames(allDiscordIds, c.env.DISCORD_TOKEN);
+    const getUsername = (id: string) => usernameMap.get(id) ?? 'Unknown User';
+
+    const usersWithUsernames = usersWithBalances.map(u => ({
+        ...u,
+        username: getUsername(u.discordId)
+    }));
 
     const days = c.req.query('days') || 'lifetime';
     let startDate = '1970-01-01';
@@ -55,39 +46,51 @@ webRouter.get('/', async (c) => {
     let activityLeaderboard = await activityService.getActivityLeaderboard(startDate, '2099-12-31');
     activityLeaderboard = activityLeaderboard.filter(a => a.splitsAttended > 0);
 
-    const activityWithUsernames = await Promise.all(
-        activityLeaderboard.map(async a => ({
-            ...a,
-            username: await fetchUsername(a.discordId)
-        }))
-    );
+    // Collect remaining IDs not already in the map and resolve them
+    const remainingIds = [
+        ...activityLeaderboard.map(a => a.discordId),
+    ];
+    const remainingMap = await userService.resolveUsernames(remainingIds, c.env.DISCORD_TOKEN);
+    remainingMap.forEach((v, k) => usernameMap.set(k, v));
+
+    const activityWithUsernames = activityLeaderboard.map(a => ({
+        ...a,
+        username: getUsername(a.discordId)
+    }));
 
     const issuerStats = await balanceService.getIssuerStats();
-    const issuerStatsWithUsernames = await Promise.all(
-        issuerStats.map(async issuer => ({
-            ...issuer,
-            username: await fetchUsername(issuer.adminDiscordId)
-        }))
-    );
+    const issuerIdsToResolve = issuerStats.map(i => i.adminDiscordId).filter(id => id !== 'WEB_ADMIN');
+    const issuerMap = await userService.resolveUsernames(issuerIdsToResolve, c.env.DISCORD_TOKEN);
+    issuerMap.forEach((v, k) => usernameMap.set(k, v));
+
+    const issuerStatsWithUsernames = issuerStats.map(issuer => ({
+        ...issuer,
+        username: issuer.adminDiscordId === 'WEB_ADMIN' ? 'Web Admin' : getUsername(issuer.adminDiscordId)
+    }));
 
     const openSessions = await sessionService.getAllSessionsWithMembers();
-    const allSessionsWithUsernames = await Promise.all(
-        openSessions.map(async s => ({
-            session: s.session,
-            memberUsernames: await Promise.all(s.members.map(fetchUsername))
-        }))
-    );
+    // Resolve all session member IDs
+    const memberIds = openSessions.flatMap(s => s.members);
+    const memberMap = await userService.resolveUsernames(memberIds, c.env.DISCORD_TOKEN);
+    memberMap.forEach((v, k) => usernameMap.set(k, v));
+
+    const allSessionsWithUsernames = openSessions.map(s => ({
+        session: s.session,
+        memberUsernames: s.members.map(id => getUsername(id))
+    }));
 
     const currentBalanceLabels = usersWithUsernames.map(u => u.username);
     const currentBalanceData = usersWithUsernames.map(u => u.balance);
 
     const earnings = await balanceService.getEarningsPerUser(startDate, '2099-12-31');
-    const earningsWithUsernames = await Promise.all(
-        earnings.map(async e => ({
-            ...e,
-            username: await fetchUsername(e.discordId)
-        }))
-    );
+    const earningsIds = earnings.map(e => e.discordId);
+    const earningsMap = await userService.resolveUsernames(earningsIds, c.env.DISCORD_TOKEN);
+    earningsMap.forEach((v, k) => usernameMap.set(k, v));
+
+    const earningsWithUsernames = earnings.map(e => ({
+        ...e,
+        username: getUsername(e.discordId)
+    }));
 
     const balanceLabels = earningsWithUsernames.map(e => e.username);
     const balanceData = earningsWithUsernames.map(e => e.earned);
@@ -148,10 +151,15 @@ webRouter.get('/', async (c) => {
             <div class="container-fluid">
                 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
                     <h1 class="mb-0">Albion Online Silver Balances</h1>
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-secondary col-btn" data-col="1">1 Col</button>
-                        <button type="button" class="btn btn-primary col-btn active" data-col="2">2 Cols</button>
-                        <button type="button" class="btn btn-secondary col-btn" data-col="3">3 Cols</button>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <button id="syncBtn" class="btn btn-outline-warning btn-sm">
+                            🔄 Sync Usernames
+                        </button>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-secondary col-btn" data-col="1">1 Col</button>
+                            <button type="button" class="btn btn-primary col-btn active" data-col="2">2 Cols</button>
+                            <button type="button" class="btn btn-secondary col-btn" data-col="3">3 Cols</button>
+                        </div>
                     </div>
                 </div>
 
@@ -323,6 +331,46 @@ webRouter.get('/', async (c) => {
             </div>
             
             <script>
+                function showToast(message, type) {
+                    type = type || 'success';
+                    const bg = type === 'success' ? 'text-bg-success' : type === 'warning' ? 'text-bg-warning' : 'text-bg-danger';
+
+                    if (!document.getElementById('toastContainer')) {
+                        const container = document.createElement('div');
+                        container.id = 'toastContainer';
+                        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                        container.style.zIndex = '9999';
+                        document.body.appendChild(container);
+                    }
+
+                    const toastEl = document.createElement('div');
+                    toastEl.className = 'toast align-items-center ' + bg + ' border-0';
+                    toastEl.setAttribute('role', 'alert');
+                    toastEl.setAttribute('aria-live', 'assertive');
+                    toastEl.setAttribute('aria-atomic', 'true');
+
+                    const inner = document.createElement('div');
+                    inner.className = 'd-flex';
+
+                    const body = document.createElement('div');
+                    body.className = 'toast-body fw-semibold';
+                    body.textContent = message;
+
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close btn-close-white me-2 m-auto';
+                    closeBtn.setAttribute('data-bs-dismiss', 'toast');
+
+                    inner.appendChild(body);
+                    inner.appendChild(closeBtn);
+                    toastEl.appendChild(inner);
+                    document.getElementById('toastContainer').appendChild(toastEl);
+
+                    const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+                    toast.show();
+                    toastEl.addEventListener('hidden.bs.toast', function() { toastEl.remove(); });
+                }
+
                 $(document).ready(function() {
                     $('#usersTable').DataTable({
                         order: [[1, 'desc']],
@@ -395,6 +443,27 @@ webRouter.get('/', async (c) => {
                         });
                     });
                     
+                // Sync Usernames button
+                    $('#syncBtn').on('click', function() {
+                        const btn = $(this);
+                        btn.prop('disabled', true).text('Syncing...');
+
+                        $.post('/api/admin/sync-usernames')
+                            .done(function(data) {
+                                const msg = data.total === 0
+                                    ? 'All usernames are already synced!'
+                                    : 'Synced ' + data.synced + ' of ' + data.total + ' usernames (' + data.failed + ' failed).';
+                                showToast(msg, data.failed > 0 ? 'warning' : 'success');
+                                if (data.synced > 0) setTimeout(function() { location.reload(); }, 1500);
+                            })
+                            .fail(function() {
+                                showToast('Sync failed. Check the worker logs.', 'danger');
+                            })
+                            .always(function() {
+                                btn.prop('disabled', false).text('Sync Usernames');
+                            });
+                    });
+
                     // Column Toggle Logic
                     $('.col-btn').on('click', function() {
                         $('.col-btn').removeClass('btn-primary').addClass('btn-secondary');
