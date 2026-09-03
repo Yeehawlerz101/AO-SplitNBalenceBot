@@ -388,7 +388,7 @@ webRouter.get('/', async (c) => {
                         lengthMenu: [5, 10, 25]
                     });
 
-                    $('.wipe-btn').on('click', function() {
+                    $('#usersTable').on('click', '.wipe-btn', function() {
                         const id = $(this).data('id');
                         if (confirm("Are you sure you want to forcibly wipe this user's balance to 0?")) {
                             $.post('/api/admin/wipe/' + id, function() {
@@ -399,7 +399,7 @@ webRouter.get('/', async (c) => {
                     
                     
                     let historyDataTable = null;
-                    $('.history-btn').on('click', function() {
+                    $('#usersTable').on('click', '.history-btn', function() {
                         const id = $(this).data('id');
                         const name = $(this).data('name');
                         $('#historyModalLabel').text('Transaction History: ' + name);
