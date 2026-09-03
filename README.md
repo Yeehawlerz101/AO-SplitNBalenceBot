@@ -59,6 +59,12 @@ Once the bot is invited to your server, you need to configure it:
    - Create a text channel in your server (e.g., `#treasury-logs`).
    - Run `/setlog channel="#treasury-logs"` so the bot can drop plain-text receipts of all transactions, making them easily searchable using Discord's native search bar.
 
+3. **Web Dashboard Customization**:
+   - The dashboard is built with Tailwind CSS and uses a dynamic monochromatic theme.
+   - To change the primary color (default is Pink), open `src/interfaces/web/dashboard.tsx`.
+   - Locate the `<script>` block near line 140 containing `tailwind.config = { ... }`.
+   - Simply change the Hex code for `brand: { DEFAULT: '#ec4899' }` and the entire dashboard (buttons, tables, borders, and charts) will automatically update to match your new color!
+
 ---
 
 ## 📚 Command Reference
