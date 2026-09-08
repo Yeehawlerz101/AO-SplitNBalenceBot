@@ -259,6 +259,7 @@ webRouter.get('/', async (c) => {
 
     let usersWithBalances = await balanceService.getAllUsersWithBalances();
     usersWithBalances = usersWithBalances.filter(u => u.balance !== 0);
+    const totalStandingBalance = usersWithBalances.reduce((sum, u) => sum + u.balance, 0);
 
     const allDiscordIds = [...usersWithBalances.map(u => u.discordId)];
     const usernameMap = await userService.resolveUsernames(allDiscordIds, c.env.DISCORD_TOKEN);
@@ -330,6 +331,11 @@ webRouter.get('/', async (c) => {
 
     const activityLabels = activityWithUsernames.map(a => a.username);
     const activityData = activityWithUsernames.map(a => a.splitsAttended);
+
+    const debtOverTime = await balanceService.getDebtOverTime(startDate, '2099-12-31');
+    const debtDays = debtOverTime.map(d => d.day);
+    const debtNewData = debtOverTime.map(d => d.newDebt);
+    const debtTotalData = debtOverTime.map(d => d.totalDebt);
 
     const clientScripts = `
         function showToast(message, type) {
@@ -455,12 +461,57 @@ webRouter.get('/', async (c) => {
             data: { labels: activityLabels, datasets: [{ label: 'Splits Attended', data: activityData, backgroundColor: brandBg, borderColor: brandColor, borderWidth: 2, fill: true, tension: 0.4, pointBackgroundColor: '#0a0a0a' }] },
             options: chartOptions
         });
+
+        const debtDays = ${JSON.stringify(debtDays)};
+        const debtNewData = ${JSON.stringify(debtNewData)};
+        const debtTotalData = ${JSON.stringify(debtTotalData)};
+        
+        new Chart(document.getElementById('totalDebtChart'), {
+            type: 'line',
+            data: {
+                labels: debtDays,
+                datasets: [
+                    {
+                        label: 'Total Owed',
+                        data: debtTotalData,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#0a0a0a'
+                    }
+                ]
+            },
+            options: chartOptions
+        });
+
+        new Chart(document.getElementById('newDebtChart'), {
+            type: 'bar',
+            data: {
+                labels: debtDays,
+                datasets: [
+                    {
+                        label: 'New Debt Created',
+                        data: debtNewData,
+                        backgroundColor: brandBg,
+                        borderColor: brandColor,
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: chartOptions
+        });
     `;
 
     return c.html(
         <DashboardLayout title="Admin Dashboard" scripts={raw(clientScripts)}>
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                <h1 className="text-2xl font-bold tracking-tight text-white m-0">Albion Online Silver Balances</h1>
+                <h1 className="text-2xl font-bold tracking-tight text-white m-0 flex items-center flex-wrap gap-2">
+                    Albion Online Silver Balances
+                    <span className="text-brand font-medium text-xl">(Total Owed: {totalStandingBalance.toLocaleString()})</span>
+                </h1>
 
                 <div className="flex flex-wrap items-center gap-3">
                     <Button id="syncBtn" variant="outline">🔄 Sync Usernames</Button>
@@ -528,6 +579,50 @@ webRouter.get('/', async (c) => {
                 >
                     <div className="relative w-full h-full flex-1 min-w-0 min-h-0">
                         <canvas id="balanceChart"></canvas>
+                    </div>
+                </Card>
+
+                {/* 6. Total Debt Over Time Chart */}
+                <Card
+                    title="Total Debt Over Time"
+                    className="min-h-[400px]"
+                    headerAction={
+                        <select
+                            className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm rounded-md focus:ring-brand focus:border-brand block w-full p-2"
+                            onChange={raw("window.location.search = '?days=' + this.value")}
+                        >
+                            <option value="7" selected={days === '7'}>Last 7 Days</option>
+                            <option value="30" selected={days === '30'}>Last 30 Days</option>
+                            <option value="60" selected={days === '60'}>Last 60 Days</option>
+                            <option value="90" selected={days === '90'}>Last 90 Days</option>
+                            <option value="lifetime" selected={days === 'lifetime'}>Lifetime</option>
+                        </select>
+                    }
+                >
+                    <div className="relative w-full h-full flex-1 min-w-0 min-h-0">
+                        <canvas id="totalDebtChart"></canvas>
+                    </div>
+                </Card>
+
+                {/* 7. New Debt Created Chart */}
+                <Card
+                    title="New Debt Created"
+                    className="min-h-[400px]"
+                    headerAction={
+                        <select
+                            className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm rounded-md focus:ring-brand focus:border-brand block w-full p-2"
+                            onChange={raw("window.location.search = '?days=' + this.value")}
+                        >
+                            <option value="7" selected={days === '7'}>Last 7 Days</option>
+                            <option value="30" selected={days === '30'}>Last 30 Days</option>
+                            <option value="60" selected={days === '60'}>Last 60 Days</option>
+                            <option value="90" selected={days === '90'}>Last 90 Days</option>
+                            <option value="lifetime" selected={days === 'lifetime'}>Lifetime</option>
+                        </select>
+                    }
+                >
+                    <div className="relative w-full h-full flex-1 min-w-0 min-h-0">
+                        <canvas id="newDebtChart"></canvas>
                     </div>
                 </Card>
 

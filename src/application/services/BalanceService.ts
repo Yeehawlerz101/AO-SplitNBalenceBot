@@ -129,4 +129,25 @@ export class BalanceService {
     async getEarningsPerUser(startDate: string, endDate: string): Promise<Array<{discordId: string, earned: number}>> {
         return await this.transactionRepo.getEarningsPerUser(startDate, endDate);
     }
+
+    /**
+     * Gets the daily debt stats combined with total debt over time.
+     */
+    async getDebtOverTime(startDate: string, endDate: string): Promise<Array<{ day: string, newDebt: number, totalDebt: number }>> {
+        const dailyStats = await this.transactionRepo.getDailyDebtStats(startDate, endDate);
+        let currentTotalDebt = await this.transactionRepo.getTotalDebtBefore(startDate);
+
+        const result: Array<{ day: string, newDebt: number, totalDebt: number }> = [];
+        
+        for (const stat of dailyStats) {
+            currentTotalDebt += stat.netChange;
+            result.push({
+                day: stat.day,
+                newDebt: stat.newDebt,
+                totalDebt: currentTotalDebt
+            });
+        }
+        
+        return result;
+    }
 }

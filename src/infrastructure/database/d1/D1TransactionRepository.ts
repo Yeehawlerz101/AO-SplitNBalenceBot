@@ -84,4 +84,33 @@ export class D1TransactionRepository implements ITransactionRepository {
             earned: row.earned
         }));
     }
+
+    async getDailyDebtStats(startDate: string, endDate: string): Promise<Array<{ day: string, newDebt: number, netChange: number }>> {
+        const endDateTime = endDate.length === 10 ? endDate + 'T23:59:59.999Z' : endDate;
+
+        const { results } = await this.db.prepare(`
+            SELECT 
+                date(created_at) as day, 
+                SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as new_debt,
+                SUM(amount) as net_change
+            FROM transactions
+            WHERE created_at >= ? AND created_at <= ?
+            GROUP BY date(created_at)
+            ORDER BY day ASC
+        `).bind(startDate, endDateTime).all<{ day: string, new_debt: number, net_change: number }>();
+
+        return results.map(row => ({
+            day: row.day,
+            newDebt: row.new_debt,
+            netChange: row.net_change
+        }));
+    }
+
+    async getTotalDebtBefore(date: string): Promise<number> {
+        const { results } = await this.db.prepare(
+            'SELECT SUM(amount) as total_debt FROM transactions WHERE created_at < ?'
+        ).bind(date).all<{ total_debt: number | null }>();
+        
+        return results[0]?.total_debt || 0;
+    }
 }

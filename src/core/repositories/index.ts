@@ -25,6 +25,8 @@ export interface ITransactionRepository {
     getIssuerStats(): Promise<Array<{adminDiscordId: string, totalAmount: number, txCount: number}>>;
     getLootSplitStats(): Promise<Array<{note: string, totalAmount: number, splitCount: number, recentDate: string}>>;
     getEarningsPerUser(startDate: string, endDate: string): Promise<Array<{discordId: string, earned: number}>>;
+    getDailyDebtStats(startDate: string, endDate: string): Promise<Array<{day: string, newDebt: number, netChange: number}>>;
+    getTotalDebtBefore(date: string): Promise<number>;
 }
 
 import { SplitSession, SplitMember } from '../entities';
